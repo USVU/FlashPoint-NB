@@ -173,6 +173,62 @@
   body.dark #start-btn { border-color: #00ff00; color: #00ff00; }
   #start-btn:hover { background: #c00; color: #fff; }
   body.dark #start-btn:hover { background: #00ff00; color: #000; }
+
+  #mobile-controls {
+    position: fixed; inset: 0; z-index: 190; pointer-events: none;
+    display: none; touch-action: none;
+  }
+  #mobile-controls.show { display: block; }
+  #mobile-controls * { touch-action: none; }
+  #mc-toggle {
+    position: fixed; bottom: 60px; right: 8px; z-index: 195;
+    font-family: 'Courier New', monospace; font-size: 10px;
+    padding: 4px 8px; border: 1px solid #bbb;
+    background: #ddd; color: #666;
+    cursor: pointer; border-radius: 3px; pointer-events: auto;
+  }
+  body.dark #mc-toggle { background: #333; color: #999; border-color: #555; }
+  #mc-look { display: none; }
+  #mc-joystick {
+    position: fixed; left: 20px; bottom: 20px; width: 110px; height: 110px;
+    border-radius: 50%; pointer-events: auto; touch-action: none;
+    background: rgba(0,0,0,0.08); border: 2px solid rgba(0,0,0,0.15);
+  }
+  body.dark #mc-joystick { background: rgba(0,255,0,0.08); border-color: rgba(0,255,0,0.2); }
+  #mc-joystick-knob {
+    position: absolute; left: 50%; top: 50%; width: 40px; height: 40px;
+    margin: -20px 0 0 -20px; border-radius: 50%;
+    background: rgba(0,0,0,0.2); pointer-events: none;
+  }
+  body.dark #mc-joystick-knob { background: rgba(0,255,0,0.3); }
+  .mc-vert {
+    position: fixed; pointer-events: auto; touch-action: none;
+    font-family: 'Courier New', monospace; font-size: 16px; font-weight: bold;
+    width: 36px; height: 36px; border-radius: 50%; border: 1px solid #bbb;
+    background: #ddd; color: #666;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; user-select: none;
+  }
+  body.dark .mc-vert { background: #333; color: #999; border-color: #555; }
+  #mc-q { left: 20px; bottom: 140px; }
+  #mc-e { left: 68px; bottom: 140px; }
+  #mc-buttons {
+    position: fixed; right: 8px; bottom: 130px; display: flex;
+    flex-direction: column; gap: 4px; pointer-events: none;
+  }
+  #mc-buttons button {
+    font-family: 'Courier New', monospace; font-size: 11px;
+    padding: 6px 10px; border: 1px solid #bbb;
+    background: #ddd; color: #666;
+    cursor: pointer; border-radius: 3px; pointer-events: auto;
+    min-width: 52px; text-align: center;
+  }
+  body.dark #mc-buttons button { background: #333; color: #999; border-color: #555; }
+  #mc-buttons button.on { border-color: #c00; color: #c00; font-weight: bold; }
+  body.dark #mc-buttons button.on { border-color: #00ff00; color: #00ff00; }
+  #mc-buttons button.on { border-color: #c00; color: #c00; font-weight: bold; }
+  body.dark #mc-buttons button.on { border-color: #00ff00; color: #00ff00; }
+  .mc-row { display: flex; gap: 4px; }
 </style>
 </head>
 <body>
@@ -226,6 +282,29 @@
   <div id="log-resize-handle"></div>
 </div>
 <div id="credit">Powered by MProcs NeonBunny</div>
+
+<div id="mobile-controls">
+  <div id="mc-joystick"><div id="mc-joystick-knob"></div></div>
+  <div id="mc-q" class="mc-vert">Q</div>
+  <div id="mc-e" class="mc-vert">E</div>
+  <div id="mc-buttons">
+    <div class="mc-row">
+      <button id="mc-interact">INTRCT</button>
+      <button id="mc-term">TERM</button>
+      <button id="mc-ctrl">CTRL</button>
+    </div>
+    <div class="mc-row">
+      <button id="mc-tab">TAB</button>
+      <button id="mc-f">F</button>
+      <button id="mc-v">V</button>
+    </div>
+    <div class="mc-row">
+      <button id="mc-zoomout">−</button>
+      <button id="mc-zoomin">+</button>
+    </div>
+  </div>
+</div>
+<button id="mc-toggle">MOBILE</button>
 
 <div id="terminal">
   <div id="terminal-resize-handle"></div>
@@ -825,7 +904,7 @@ let rightLook = false;
 
 renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 renderer.domElement.addEventListener('pointerdown', (e) => {
-  if (e.button === 0 && e.ctrlKey && !terminalOpen) {
+  if (e.button === 0 && (e.ctrlKey || mcCtrlHeld) && !terminalOpen) {
     const hits = getIntersects(e.clientX, e.clientY);
     const wfHit = hits.find(h => h.object.userData?.isOutline || h.object.userData?.type?.startsWith('wire-'));
     if (wfHit) {
@@ -1846,6 +1925,128 @@ inputEl.addEventListener('keydown', (e) => {
 });
 
 const _tcmds = { help:1, move:1, speed:1, theme:1, fog:1, grid:1, clear:1, tp:1, randomize:1, shuffle:1, recolor:1, gravity:1, topdown:1, td:1, persp:1, perspective:1, fps:1, interact:1, interactive:1, terminate:1, sound:1, radical:1, bg:1, green:1, spawn:1, clearflat:1, savelog:1, clearlog:1, nano:1, enter:1, maxobj:1, reset:1, '?':1 };
+
+// ── Mobile Controls ──
+const mcEl = document.getElementById('mobile-controls');
+const mcToggle = document.getElementById('mc-toggle');
+const mcJoy = document.getElementById('mc-joystick');
+const mcKnob = document.getElementById('mc-joystick-knob');
+const mcCtrl = document.getElementById('mc-ctrl');
+let mcVisible = false;
+let mcJoyId = null;
+let mcCtrlHeld = false;
+
+function isTouchDevice() { return 'ontouchstart' in window && navigator.maxTouchPoints > 1; }
+
+if (isTouchDevice()) {
+  mcEl.classList.add('show');
+  mcVisible = true;
+  mcToggle.textContent = 'HIDE';
+}
+
+mcToggle.addEventListener('click', () => {
+  mcVisible = !mcVisible;
+  mcEl.classList.toggle('show', mcVisible);
+  mcToggle.textContent = mcVisible ? 'HIDE' : 'MOBILE';
+});
+
+// Joystick
+function joyDown(e) { e.preventDefault(); mcJoyId = e.changedTouches[0].identifier; joyMove(e); }
+function joyMove(e) {
+  e.preventDefault();
+  const t = Array.from(e.changedTouches).find(tc => tc.identifier === mcJoyId) || e.changedTouches[0];
+  if (!t) return;
+  const rect = mcJoy.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+  const dx = t.clientX - cx, dy = t.clientY - cy;
+  const maxR = rect.width / 2 - 10;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  const clamp = Math.min(dist, maxR) / maxR;
+  const angle = Math.atan2(dy, dx);
+  const cxv = Math.cos(angle) * clamp, cyv = Math.sin(angle) * clamp;
+  mcKnob.style.transform = `translate(${cxv * maxR}px, ${cyv * maxR}px)`;
+  keys.w = cyv < -0.25; keys.s = cyv > 0.25; keys.a = cxv < -0.25; keys.d = cxv > 0.25;
+}
+function joyUp(e) { e.preventDefault(); mcKnob.style.transform='translate(0,0)'; keys.w=keys.s=keys.a=keys.d=false; mcJoyId=null; }
+mcJoy.addEventListener('touchstart', joyDown, { passive: false });
+mcJoy.addEventListener('touchmove', joyMove, { passive: false });
+mcJoy.addEventListener('touchend', joyUp, { passive: false });
+mcJoy.addEventListener('touchcancel', joyUp, { passive: false });
+
+// Look (document-level touch when overlay is shown)
+let mcLastX = null, mcLastY = null, mcTouchId = null;
+document.addEventListener('touchstart', (e) => {
+  if (!mcVisible) return;
+  const t = e.changedTouches[0];
+  if (!t) return;
+  const rect = mcJoy.getBoundingClientRect();
+  if (t.clientX >= rect.left && t.clientX <= rect.right && t.clientY >= rect.top && t.clientY <= rect.bottom) return;
+  mcTouchId = t.identifier; mcLastX = t.clientX; mcLastY = t.clientY;
+}, { passive: true });
+document.addEventListener('touchmove', (e) => {
+  if (mcLastX == null || mcTouchId == null) return;
+  const t = Array.from(e.changedTouches).find(tc => tc.identifier === mcTouchId);
+  if (!t) return;
+  e.preventDefault();
+  rightLook = true;
+  euler.yaw -= (t.clientX - mcLastX) * 0.006;
+  euler.pitch -= (t.clientY - mcLastY) * 0.006;
+  euler.pitch = Math.max(-Math.PI/2 + 0.05, Math.min(Math.PI/2 - 0.05, euler.pitch));
+  camera.rotation.order = 'YXZ';
+  camera.rotation.y = euler.yaw;
+  camera.rotation.x = euler.pitch;
+  mcLastX = t.clientX; mcLastY = t.clientY;
+}, { passive: false });
+document.addEventListener('touchend', (e) => {
+  if (mcTouchId == null) return;
+  const t = Array.from(e.changedTouches).find(tc => tc.identifier === mcTouchId);
+  if (t) { rightLook = false; mcLastX = mcLastY = null; mcTouchId = null; }
+}, { passive: true });
+document.addEventListener('touchcancel', () => { rightLook = false; mcLastX = mcLastY = null; mcTouchId = null; }, { passive: true });
+
+// Buttons
+document.getElementById('mc-interact').addEventListener('click', () => {
+  document.getElementById('btn-interact').click();
+  document.getElementById('mc-interact').classList.toggle('on');
+});
+document.getElementById('mc-term').addEventListener('click', () => {
+  if (!interactiveMode) { showMsg('enable interact first', 1000); return; }
+  terminateMode = !terminateMode; updateHudMode();
+  document.getElementById('mc-term').classList.toggle('on');
+});
+mcCtrl.addEventListener('click', () => {
+  mcCtrlHeld = !mcCtrlHeld;
+  mcCtrl.classList.toggle('on', mcCtrlHeld);
+});
+document.getElementById('mc-tab').addEventListener('click', () => toggleTerminal());
+document.getElementById('mc-f').addEventListener('click', () => { moveSpeed = moveSpeed === 4 ? 10 : 4; showMsg(`speed ${moveSpeed}`); });
+document.getElementById('mc-v').addEventListener('click', () => { toggleView(); showMsg(viewMode.toUpperCase()); });
+document.getElementById('mc-q').addEventListener('touchstart', (e) => { e.preventDefault(); keys.q = true; });
+document.getElementById('mc-q').addEventListener('touchend', (e) => { e.preventDefault(); keys.q = false; });
+document.getElementById('mc-q').addEventListener('touchcancel', (e) => { keys.q = false; });
+document.getElementById('mc-q').addEventListener('mousedown', () => keys.q = true);
+document.getElementById('mc-q').addEventListener('mouseup', () => keys.q = false);
+document.getElementById('mc-e').addEventListener('touchstart', (e) => { e.preventDefault(); keys.e = true; });
+document.getElementById('mc-e').addEventListener('touchend', (e) => { e.preventDefault(); keys.e = false; });
+document.getElementById('mc-e').addEventListener('touchcancel', (e) => { keys.e = false; });
+document.getElementById('mc-e').addEventListener('mousedown', () => keys.e = true);
+document.getElementById('mc-e').addEventListener('mouseup', () => keys.e = false);
+document.getElementById('mc-zoomout').addEventListener('click', () => {
+  if (selectedObject && interactiveMode) {
+    renderer.domElement.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, ctrlKey: true }));
+  } else if (viewMode === 'topdown') {
+    camera.position.y = Math.min(80, camera.position.y + 2);
+  }
+});
+document.getElementById('mc-zoomin').addEventListener('click', () => {
+  if (selectedObject && interactiveMode) {
+    renderer.domElement.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, ctrlKey: true }));
+  } else if (viewMode === 'topdown') {
+    camera.position.y = Math.max(5, camera.position.y - 2);
+  }
+});
+
+// Only the first handler checks e.ctrlKey. Done.
 
 let prevTime = performance.now();
 let frameCount = 0;
