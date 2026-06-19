@@ -150,11 +150,40 @@
   }
   body.dark #log-panel > div { color: #00ff00; background: rgba(0,0,0,0.35); }
   body.dark #log-panel .ts { color: #448844; opacity: 0.7; }
+
+  #start-screen {
+    position: fixed; inset: 0; z-index: 200;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: #f0ede6; font-family: 'Courier New', monospace;
+    cursor: pointer; transition: opacity 0.6s;
+  }
+  body.dark #start-screen { background: #0a0a0a; }
+  #start-screen.hidden { opacity: 0; pointer-events: none; }
+  #start-screen h1 { font-size: 48px; color: #c00; margin-bottom: 8px; letter-spacing: 4px; }
+  body.dark #start-screen h1 { color: #00ff00; }
+  #start-screen p { font-size: 16px; color: #666; margin-bottom: 32px; }
+  body.dark #start-screen p { color: #448844; }
+  #start-btn {
+    font-family: 'Courier New', monospace; font-size: 20px;
+    padding: 12px 40px; border: 2px solid #c00; background: transparent;
+    color: #c00; cursor: pointer; border-radius: 4px;
+    transition: background 0.2s, color 0.2s;
+  }
+  body.dark #start-btn { border-color: #00ff00; color: #00ff00; }
+  #start-btn:hover { background: #c00; color: #fff; }
+  body.dark #start-btn:hover { background: #00ff00; color: #000; }
 </style>
 </head>
 <body>
 
 <div id="container"></div>
+
+<div id="start-screen">
+  <h1>FP</h1>
+  <p>TERMINAL SPACE v0.2</p>
+  <button id="start-btn">START</button>
+</div>
 
 <div id="hud">
   <div>FP TERMINAL SPACE v0.2</div>
@@ -1850,7 +1879,11 @@ tick();
 print('────────────────────────────────', 'dim');
 print('FP v0.2   |   Tab = terminal  |  Right-drag = look around', 'info');
 print('Interact: left-click drag  |  Ctrl+click wireframe  |  Ctrl+scroll resize  |  term+Ctrl = del wire', 'dim');
-inputEl.focus();
+document.getElementById('start-btn').addEventListener('click', () => {
+  document.getElementById('start-screen').classList.add('hidden');
+  initAudio();
+  inputEl.focus();
+});
 </script>
 </body>
 </html>
