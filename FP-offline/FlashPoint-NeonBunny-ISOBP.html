@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FP — Terminal Space</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #f0ede6; overflow: hidden; font-family: 'Courier New', monospace; }
+  body.dark { background: #0a0a0a; }
+  body.dark #terminal { color: #00ff00; border-top-color: rgba(0,255,100,0.3); }
+  body.dark #terminal-output .info { color: #00ff00; }
+  body.dark #terminal-output .warn { color: #ffdd44; }
+  body.dark #terminal-output .error { color: #ff6666; }
+  body.dark #terminal-output .dim { color: #006600; }
+  body.dark #prompt, body.dark #command-input { color: #00ff00; caret-color: #00ff00; }
+  body.dark #terminal-output::-webkit-scrollbar-thumb { background: #00ff00; }
+  body.dark #hud { color: #00ff00; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
+  body.dark #hud .label { color: #448844; }
+  body.dark #hud .view { color: #ffdd44; }
+  body.dark .msg { color: #00ff00; text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
+  body.dark #toolbar button, body.dark #toolbar select {
+    background: rgba(10,10,10,0.85); color: #00ff00; border-color: #446644;
+  }
+  body.dark #toolbar button:hover, body.dark #toolbar select:hover { background: #1a1a1a; }
+  body.dark #toolbar button.on { border-color: #00ff00; color: #00ff00; }
+  body.dark #cap-counter { color: #448844 !important; }
+
+  #container { position: fixed; inset: 0; }
+  canvas { display: block; }
+
+  #terminal {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: transparent;
+    border-top: 1px solid rgba(200, 0, 0, 0.3);
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    color: #c00;
+    z-index: 100;
+    transition: transform 0.25s ease;
+    transform: translateY(0);
+  }
+  #terminal.hidden {
+    transform: translateY(100%);
+    pointer-events: none;
+  }
+  #terminal-resize-handle {
+    position: absolute; top: -4px; left: 0; right: 0; height: 8px;
+    cursor: ns-resize; z-index: 101;
+    pointer-events: auto;
+  }
+  #terminal-resize-handle::after {
+    content: ''; position: absolute; top: 3px; left: 50%;
+    transform: translateX(-50%);
+    width: 40px; height: 3px; border-radius: 2px;
+    background: rgba(0,0,0,0.2);
+  }
+  #terminal-output {
+    height: 120px; overflow-y: auto; padding: 8px 12px 4px;
+    scrollbar-width: thin; scrollbar-color: #c00 transparent;
+    line-height: 1.5;
+  }
+  #terminal-output::-webkit-scrollbar { width: 4px; }
+  #terminal-output::-webkit-scrollbar-thumb { background: #c00; }
+  #terminal-output .info  { color: #c00; }
+  #terminal-output .warn  { color: #ff4444; }
+  #terminal-output .error { color: #ff8888; }
+  #terminal-output .dim   { color: #660000; }
+
+  #input-line {
+    display: flex; align-items: center;
+    padding: 4px 12px 8px;
+  }
+  #prompt { color: #c00; margin-right: 8px; white-space: nowrap; }
+  #command-input {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: #c00; font: inherit; caret-color: #c00;
+  }
+
+  #hud {
+    position: fixed; top: 12px; left: 12px;
+    color: #333; font-family: 'Courier New', monospace;
+    font-size: 12px; line-height: 1.6; z-index: 50;
+    text-shadow: 0 1px 2px rgba(255,255,255,0.6);
+    pointer-events: none;
+  }
+  #hud .label { color: #888; }
+  #hud .view { color: #b8860b; }
+
+  #toolbar {
+    position: fixed; top: 12px; right: 12px; z-index: 55;
+    display: flex; flex-direction: column; gap: 4px;
+    pointer-events: none;
+  }
+  #toolbar button, #toolbar select {
+    font-family: 'Courier New', monospace; font-size: 11px;
+    padding: 4px 10px; border: 1px solid #999;
+    background: rgba(240,237,230,0.85); color: #333;
+    cursor: pointer; border-radius: 3px;
+    pointer-events: auto; text-align: left;
+    transition: background 0.15s;
+  }
+  #toolbar button:hover, #toolbar select:hover { background: #ddd; }
+  #toolbar button.on { border-color: #c00; color: #c00; font-weight: bold; }
+  #toolbar .add-row { display: flex; gap: 4px; }
+  #toolbar .add-row select { flex: 1; }
+
+  .msg {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    color: #333; font-size: 24px; pointer-events: none;
+    text-shadow: 0 2px 8px rgba(255,255,255,0.8);
+    opacity: 0; transition: opacity 0.4s; z-index: 60;
+  }
+  .msg.show { opacity: 1; }
+
+  #log-panel {
+    position: fixed; top: 0; left: 160px; right: 170px; height: 80px;
+    z-index: 45; display: flex; gap: 4px; padding: 2px 4px 10px;
+    pointer-events: auto;
+  }
+  #log-panel > div {
+    flex: 1; overflow-y: scroll; padding: 2px 6px;
+    font-family: 'Courier New', monospace; font-size: 10px;
+    color: #555; line-height: 1.5;
+    background: rgba(240,237,230,0.6);
+    border: none;
+    scrollbar-width: thin; scrollbar-color: #aaa transparent;
+  }
+  #log-panel > div::-webkit-scrollbar { width: 3px; }
+  #log-panel > div::-webkit-scrollbar-thumb { background: #aaa; border-radius: 2px; }
+  #log-panel .log-header { font-weight: bold; font-size: 9px; margin-bottom: 2px; opacity: 0.5; position: sticky; top: 0; background: inherit; }
+  #log-panel .entry { white-space: pre-wrap; overflow: visible; }
+  #log-panel .ts { opacity: 0.4; margin-right: 4px; }
+  #log-resize-handle {
+    position: absolute; bottom: -4px; left: 0; right: 0; height: 8px;
+    cursor: ns-resize; z-index: 46;
+    pointer-events: auto;
+  }
+  #log-resize-handle::after {
+    content: ''; position: absolute; bottom: 3px; left: 50%;
+    transform: translateX(-50%);
+    width: 40px; height: 3px; border-radius: 2px;
+    background: rgba(0,0,0,0.2);
+  }
+  .nano { color: #ff69b4; }
+  body.dark .nano { color: #00ff00; }
+  #credit {
+    position: fixed; bottom: 4px; right: 12px; z-index: 40;
+    font-family: 'Courier New', monospace; font-size: 18px;
+    color: #f0f; pointer-events: none; opacity: 0.7;
+  }
+  body.dark #log-panel > div { color: #00ff00; background: rgba(0,0,0,0.35); }
+  body.dark #log-panel .ts { color: #448844; opacity: 0.7; }
+
+  #start-screen {
+    position: fixed; inset: 0; z-index: 200;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: #f0ede6; font-family: 'Courier New', monospace;
+    cursor: pointer; transition: opacity 0.6s;
+  }
+  body.dark #start-screen { background: #0a0a0a; }
+  #start-screen.hidden { opacity: 0; pointer-events: none; }
+  #start-screen h1 { font-size: 48px; color: #c00; margin-bottom: 8px; letter-spacing: 4px; }
+  body.dark #start-screen h1 { color: #00ff00; }
+  #start-screen p { font-size: 16px; color: #666; margin-bottom: 32px; }
+  body.dark #start-screen p { color: #448844; }
+  #start-btn {
+    font-family: 'Courier New', monospace; font-size: 20px;
+    padding: 12px 40px; border: 2px solid #c00; background: transparent;
+    color: #c00; cursor: pointer; border-radius: 4px;
+    transition: background 0.2s, color 0.2s;
+  }
+  body.dark #start-btn { border-color: #00ff00; color: #00ff00; }
+  #start-btn:hover { background: #c00; color: #fff; }
+  body.dark #start-btn:hover { background: #00ff00; color: #000; }
+
+  #mobile-controls {
+    position: fixed; inset: 0; z-index: 190; pointer-events: none;
+    display: none; touch-action: none;
+  }
+  #mobile-controls.show { display: block; }
+  #mobile-controls * { touch-action: none; }
+  #mc-toggle {
+    position: fixed; bottom: 60px; right: 8px; z-index: 195;
+    font-family: 'Courier New', monospace; font-size: 10px;
+    padding: 4px 8px; border: 1px solid #bbb;
+    background: #ddd; color: #666;
+    cursor: pointer; border-radius: 3px; pointer-events: auto;
+  }
+  body.dark #mc-toggle { background: #333; color: #999; border-color: #555; }
+  #mc-look { display: none; }
+  #mc-joystick {
+    position: fixed; left: 20px; bottom: 20px; width: 110px; height: 110px;
+    border-radius: 50%; pointer-events: auto; touch-action: none;
+    background: rgba(0,0,0,0.08); border: 2px solid rgba(0,0,0,0.15);
+  }
+  body.dark #mc-joystick { background: rgba(0,255,0,0.08); border-color: rgba(0,255,0,0.2); }
+  #mc-joystick-knob {
+    position: absolute; left: 50%; top: 50%; width: 40px; height: 40px;
+    margin: -20px 0 0 -20px; border-radius: 50%;
+    background: rgba(0,0,0,0.2); pointer-events: none;
+  }
+  body.dark #mc-joystick-knob { background: rgba(0,255,0,0.3); }
+  .mc-vert {
+    position: fixed; pointer-events: auto; touch-action: none;
+    font-family: 'Courier New', monospace; font-size: 16px; font-weight: bold;
+    width: 36px; height: 36px; border-radius: 50%; border: 1px solid #bbb;
+    background: #ddd; color: #666;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; user-select: none;
+  }
+  body.dark .mc-vert { background: #333; color: #999; border-color: #555; }
+  #mc-q { left: 20px; bottom: 140px; }
+  #mc-e { left: 68px; bottom: 140px; }
+  #mc-buttons {
+    position: fixed; right: 8px; bottom: 130px; display: flex;
+    flex-direction: column; gap: 4px; pointer-events: none;
+  }
+  #mc-buttons button {
+    font-family: 'Courier New', monospace; font-size: 11px;
+    padding: 6px 10px; border: 1px solid #bbb;
+    background: #ddd; color: #666;
+    cursor: pointer; border-radius: 3px; pointer-events: auto;
+    min-width: 52px; text-align: center;
+  }
+  body.dark #mc-buttons button { background: #333; color: #999; border-color: #555; }
+  #mc-buttons button.on { border-color: #c00; color: #c00; font-weight: bold; }
+  body.dark #mc-buttons button.on { border-color: #00ff00; color: #00ff00; }
+  #mc-buttons button.on { border-color: #c00; color: #c00; font-weight: bold; }
+  body.dark #mc-buttons button.on { border-color: #00ff00; color: #00ff00; }
+  .mc-row { display: flex; gap: 4px; }
+</style>
+</head>
+<body>
+
+<div id="container"></div>
+
+<div id="start-screen">
+  <h1>FP</h1>
+  <p>TERMINAL SPACE v0.2</p>
+  <button id="start-btn">START</button>
+</div>
+
+<div id="hud">
+  <div>FP TERMINAL SPACE v0.2</div>
+  <div><span class="label">POS</span> <span id="hud-pos">0 0 0</span></div>
+  <div><span class="label">FPS</span> <span id="hud-fps">60</span></div>
+  <div><span class="label">OBJ</span> <span id="hud-count">0</span></div>
+  <div><span class="label">VIEW</span> <span id="hud-view">FPS</span></div>
+  <div><span class="label">MODE</span> <span id="hud-mode">—</span></div>
+</div>
+
+<div id="toolbar">
+  <button id="btn-interact">INTERACT</button>
+  <button id="btn-terminate">TERMINATE</button>
+  <button id="btn-radical">RADICALS</button>
+  <button id="btn-shuffle">SHUFFLE</button>
+  <button id="btn-reset">RESET</button>
+  <button id="btn-clearflat">CLEAR FLAT</button>
+  <button id="btn-green">GREEN: OFF</button>
+  <button id="btn-spawn">SPAWN: ON</button>
+  <button id="btn-clearlog">CLEAR LOG</button>
+  <button id="btn-bg">BG: LIGHT</button>
+  <div class="add-row">
+    <button id="btn-add">+ADD</button>
+    <select id="add-type">
+      <option value="square">square</option>
+      <option value="circle">circle</option>
+      <option value="cube">cube</option>
+      <option value="sphere">sphere</option>
+      <option value="torus">torus</option>
+      <option value="cone">cone</option>
+      <option value="cylinder">cylinder</option>
+    </select>
+  </div>
+  <div class="add-row" id="capture-row">
+    <button id="btn-capture" style="font-weight:bold;">CAPTURE</button>
+    <span id="cap-counter" style="font-family:'Courier New',monospace;font-size:11px;color:#888;line-height:28px;">#1</span>
+  </div>
+</div>
+
+<div class="msg" id="overlay-msg"></div>
+<div id="log-panel">
+  <div id="log-spawn"><div class="log-header">SPAWN</div></div>
+  <div id="log-actions"><div class="log-header">ACTIONS</div></div>
+  <div id="log-resize-handle"></div>
+</div>
+<div id="credit">Powered by MProcs NeonBunny</div>
+
+<div id="mobile-controls">
+  <div id="mc-joystick"><div id="mc-joystick-knob"></div></div>
+  <div id="mc-q" class="mc-vert">Q</div>
+  <div id="mc-e" class="mc-vert">E</div>
+  <div id="mc-buttons">
+    <div class="mc-row">
+      <button id="mc-interact">INTRCT</button>
+      <button id="mc-term">TERM</button>
+      <button id="mc-ctrl">CTRL</button>
+    </div>
+    <div class="mc-row">
+      <button id="mc-tab">TAB</button>
+      <button id="mc-f">F</button>
+      <button id="mc-v">V</button>
+    </div>
+    <div class="mc-row">
+      <button id="mc-zoomout">−</button>
+      <button id="mc-zoomin">+</button>
+    </div>
+  </div>
+</div>
+<button id="mc-toggle">MOBILE</button>
+
+<div id="terminal">
+  <div id="terminal-resize-handle"></div>
+  <div id="terminal-output">
+    <div class="dim">─═ FP TERMINAL SPACE v0.2 ═─</div>
+    <div class="dim">Type <span class="info">help</span> for commands.</div>
+  </div>
+  <div id="input-line">
+    <span id="prompt">FP&gt;</span>
+    <input id="command-input" type="text" spellcheck="false" autocomplete="off">
+  </div>
+</div>
+
+<script src="./bundle.js"></script>
+</body>
+</html>
