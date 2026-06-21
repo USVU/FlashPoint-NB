@@ -37639,7 +37639,7 @@ var FP = (() => {
   }
   tick();
   print("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500", "dim");
-  print("FP v0.2   |   Tab = terminal  |  Right-drag = look around", "info");
+  print("FP v0.3   |   Tab = terminal  |  Right-drag = look around", "info");
   print("Interact: left-click drag  |  Ctrl+click wireframe  |  Ctrl+scroll resize  |  term+Ctrl = del wire", "dim");
   document.getElementById("start-btn").addEventListener("click", () => {
     document.getElementById("start-screen").classList.add("hidden");
